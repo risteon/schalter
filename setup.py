@@ -14,5 +14,5 @@ setup(name='schalter',
       ],
       setup_requires=['pytest-runner'],
       tests_require=['pytest'],
-      python_requires='>=3.5',
+      python_requires='>=3.6',
       )
