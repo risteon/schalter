@@ -98,6 +98,8 @@ class Schalter(object, metaclass=_SchalterMeta):
             self._overrides_default[param] = value
         elif self._overrides_default[param] != value:
             raise ValueError("Param '{}' already set to a different value.".format(param))
+        if param not in self._config:
+            self._config[param] = value
 
     def set_manual(self, param: str, value):
         if param not in self._overrides_manual:

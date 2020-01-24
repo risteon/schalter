@@ -8,6 +8,7 @@ from schalter import Schalter
 
 
 def test_default_config():
+    Schalter.clear()
     d = Schalter.get_config()
     assert type(d) == Schalter
     assert len(d.config) == 0
