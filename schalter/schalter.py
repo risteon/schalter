@@ -152,7 +152,7 @@ class Schalter(object, metaclass=_SchalterMeta):
                 if defaults is None:
                     defaults = {}
                 # only fill in arguments from mapping
-                m = {k: (defaults.get(k), v) for k, v in mapping.items()}
+                m = {k: (defaults.get(v), v) for k, v in mapping.items()}
 
             # make sure defaults for the same parameter are consistent
             config_obj: Schalter = Schalter.get_config()

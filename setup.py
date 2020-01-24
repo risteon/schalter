@@ -15,4 +15,8 @@ setup(name='schalter',
       setup_requires=['pytest-runner'],
       tests_require=['pytest'],
       python_requires='>=3.6',
+      classifiers=[
+          'Development Status :: 3 - Alpha',
+          'Intended Audience :: Developers',
+      ],
       )
