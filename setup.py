@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='schalter',
-      version='0.1.0',
+      version='0.1.0.dev1',
       description='Fast and simple configuration',
       url='http://github.com/risteon/schalter',
       author='Christoph Rist',
