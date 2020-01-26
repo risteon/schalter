@@ -22,6 +22,15 @@ def test_schalter():
     assert add_constant(1, constant_value=3) == 4
     assert Schalter['constant_value'] == 3
 
+    Schalter['another_value'] = 42
+
+    @Schalter.configure
+    def check_value(expected, *, another_value: int = -1):
+        assert expected == another_value
+    check_value(42)
+    check_value(1, another_value=1)
+    check_value(1)
+
 
 def test_empty_configures(caplog):
     Schalter.clear()
@@ -74,10 +83,14 @@ def test_subset_configures_and_overrides():
 def test_remap_key():
     Schalter.clear()
 
+    @Schalter.configure(local_name='config_name')
+    def f(*, local_name: str = 'default_value'):
+        print(local_name)
+    assert Schalter['config_name'] == 'default_value'
+
     @Schalter.configure('foo', bar='baz')
     def x(*, foo: int = 3, bar: int = 5):
         _ = foo * bar
-
     assert Schalter['foo'] == 3
     assert Schalter['baz'] == 5
     with pytest.raises(KeyError):
@@ -87,10 +100,30 @@ def test_remap_key():
 def test_misc():
     Schalter.clear()
 
+    # make sure that this does not configure the function arg 'a'
+    # and does not contain a config value 'b'
     @Schalter.configure(b='a')
     def foo(*, a: int = 4, b: int):
         return a * b
-    assert foo() == 16
+
+    assert foo(b=5) == 20
+    assert Schalter['a'] == 5
+    assert not bool('b' in Schalter.get_config())
+    assert 'b' not in Schalter.get_config()
+    assert not bool('b' in Schalter)
+    with pytest.raises(KeyError):
+        _ = Schalter['b']
+
+
+    def bar(*, c: int = 4, d: int):
+        return c * d
+
+
+
+def test_do_not_override_with_default_values():
+    Schalter.clear()
+    # Todo:  Make sure that a (later defined) default value does not override a
+    # Todo:  manually supplied parameter.
 
 
 def test_multiple_default_values():

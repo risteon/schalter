@@ -4,6 +4,7 @@ import os
 import logging
 import pathlib
 import inspect
+import typing
 from ruamel.yaml import YAML
 
 logger = logging.getLogger(__name__)
@@ -20,19 +21,50 @@ class _SchalterMeta(type):
     def get(self, arg):
         raise NotImplementedError()
 
-    def __getitem__(self, arg):
-        return self.get(arg)
+    def set(cls, key, value):
+        raise NotImplementedError()
+    
+    def get_config(cls, *_args, **_kwargs):
+        raise NotImplementedError()
+
+    def __getitem__(cls, arg):
+        return cls.get(arg)
+
+    def __setitem__(cls, key, value):
+        return cls.set(key, value)
+
+    def __contains__(cls, item):
+        return cls.get_config().__contains__(item)
+
+
+class ImmutableValues:
+    def __init__(self):
+        self._x = {}
+
+    def __getitem__(self, item):
+        return self._x[item]
+
+    def __setitem__(self, key, value):
+        return self.set(key, value)
+
+    def set(self, key, value):
+        if key not in self._x:
+            self._x[key] = value
+        elif self._x[key] != value:
+            raise ValueError("Param '{}' already set to a different default value.".format(key))
 
 
 class Schalter(object, metaclass=_SchalterMeta):
 
     DEFAULT_ENV_VAR_NAME = 'SCHALTER_CONFIG_LOC'
     _configurations = {}
+    Unset = object()
 
     def __init__(self, name='default'):
         self._raw_configs = []
         self._config = {}
-        self._overrides_default = {}
+        # default values can only be set once and are immutable
+        self.default_values = ImmutableValues()
         self._overrides_manual = {}
         self.name = name
 
@@ -40,15 +72,8 @@ class Schalter(object, metaclass=_SchalterMeta):
         instance = super().__new__(cls)
         return instance
 
-    @staticmethod
-    def clear():
-        Schalter._configurations.clear()
-
-    @staticmethod
-    def get_config(name='default'):
-        if name not in Schalter._configurations:
-            Schalter._configurations[name] = Schalter(name=name)
-        return Schalter._configurations[name]
+    def __contains__(self, item):
+        return self._config.__contains__(item)
 
     @property
     def config(self):
@@ -94,10 +119,7 @@ class Schalter(object, metaclass=_SchalterMeta):
         self._config.update(config_data)
 
     def set_default(self, param: str, value):
-        if param not in self._overrides_default:
-            self._overrides_default[param] = value
-        elif self._overrides_default[param] != value:
-            raise ValueError("Param '{}' already set to a different value.".format(param))
+        self.default_values[param] = value
         if param not in self._config:
             self._config[param] = value
 
@@ -108,9 +130,46 @@ class Schalter(object, metaclass=_SchalterMeta):
             raise ValueError("Param '{}' already set to a different value.".format(param))
         self._config[param] = value
 
+    def make_call_decorated_function(self, decorated, mapping: {str: (str, typing.Any)}):
+        """
+
+        :param decorated: original function to be configured
+        :param mapping: keyword args to be configured or mapped to a specific key.
+        {LOCAL_NAME (name in func kwargs): (CONFIG_NAME, value if not supplied)}
+
+        :return:
+        """
+        def call_decorated_function(*args, **kwargs):
+            # save all supplied args that are marked as to be configured
+            manual_params = set(kwargs.keys()).intersection(mapping.keys())
+            for p in manual_params:
+                self.set_manual(mapping[p][0], kwargs[p])
+
+            kwargs_to_add = mapping.keys() - kwargs.keys()
+            try:
+                kwargs.update({k: self.config[mapping[k][0]] for k in kwargs_to_add})
+            except KeyError as e:
+                raise KeyError("Value missing in configuration: {}.".format(str(e)))
+            return decorated(*args, **kwargs)
+        return call_decorated_function
+
+    @staticmethod
+    def clear():
+        Schalter._configurations.clear()
+
+    @staticmethod
+    def get_config(name='default'):
+        if name not in Schalter._configurations:
+            Schalter._configurations[name] = Schalter(name=name)
+        return Schalter._configurations[name]
+
     @staticmethod
     def get(arg):
         return Schalter.get_config().config[arg]
+
+    @staticmethod
+    def set(key, value):
+        Schalter.get_config().config[key] = value
 
     @staticmethod
     def load_config(config_name: str, only_update: bool = False):
@@ -147,42 +206,27 @@ class Schalter(object, metaclass=_SchalterMeta):
                 # try to fill in all arguments
                 if defaults is None:
                     defaults = {}
-                m = {x: (defaults.get(x), x) for x in kwonly}
+                m = {x: (x, defaults.get(x, Schalter.Unset)) for x in kwonly}
             else:
                 if defaults is None:
                     defaults = {}
-                # only fill in arguments from mapping
-                m = {k: (defaults.get(v), v) for k, v in mapping.items()}
+                # for each value to be configured, see if a default is given
+                m = {k: (v, defaults.get(k, Schalter.Unset)) for k, v in mapping.items()}
 
-            # make sure defaults for the same parameter are consistent
+            # Register defaults. Make sure defaults for the same parameter are consistent
             config_obj: Schalter = Schalter.get_config()
-            for _, (d, k) in m.items():
-                if d is not None:
-                    config_obj.set_default(k, d)
+            for _, (config_name, default_value) in m.items():
+                if default_value is not Schalter.Unset:
+                    config_obj.set_default(config_name, default_value)
 
-            def replacement(*args, **kwargs):
-                manual_params = set(kwargs.keys()).intersection(m.keys())
-                for p in manual_params:
-                    config_obj.set_manual(m[p][1], kwargs[p])
-
-                kwargs_to_add = m.keys() - kwargs.keys()
-                kwargs_from_defaults = kwargs_to_add - config_obj.config.keys()
-                try:
-                    config_obj.config.update({m[k][1]: config_obj._overrides_default[m[k][1]]
-                                              for k in kwargs_from_defaults})
-                except KeyError as e:
-                    raise KeyError("Value missing in configuration: {}.".format(str(e)))
-
-                try:
-                    kwargs.update({k: config_obj.config[m[k][1]] for k in kwargs_to_add})
-                except KeyError as e:
-                    raise KeyError("Value missing in configuration: {}.".format(str(e)))
-                return decorated(*args, **kwargs)
-
-            return replacement
+            # recreate the same mapping. Now all new defaults are set in the configuration
+            # and consistent
+            m = {k: (v[0], config_obj.config.get(v[0])) for k, v in m.items()}
+            return config_obj.make_call_decorated_function(decorated, m)
 
         # determine if this decorator is used without arguments
         if args and callable(args[0]):
+            # mapping is empty and will be interpreted to configure all kwonly args
             return inner_conf(args[0])
         else:
             s = set(args)
