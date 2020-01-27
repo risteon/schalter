@@ -154,8 +154,14 @@ def test_misc():
 
 def test_do_not_override_with_default_values():
     Schalter.clear()
-    # Todo:  Make sure that a (later defined) default value does not override a
-    # Todo:  manually supplied parameter.
+    # A (later defined) default value does not override a manually supplied parameter.
+
+    Schalter['constant'] = 4
+
+    @Schalter.configure('constant')
+    def foo(*, constant=-1):
+        return constant
+    assert foo() == 4
 
 
 def test_multiple_default_values():
@@ -175,3 +181,22 @@ def test_multiple_default_values():
     @Schalter.configure
     def add_constant_c(x: int, *, constant_value: int = 1):
         return x + constant_value
+
+    Schalter.clear()
+
+    @Schalter.configure
+    def foo(*, _name: str = 'baz'):
+        pass
+
+    @Schalter.configure
+    def bar(*, _name: str = 'baz'):
+        pass
+
+    with pytest.raises(ValueError):
+        @Schalter.configure
+        def foo(*, _name2: str = 'baz'):
+            pass
+
+        @Schalter.configure
+        def bar(*, _name2: str = 'bar'):
+            pass
