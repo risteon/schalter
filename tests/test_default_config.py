@@ -12,3 +12,9 @@ def test_default_config():
     d = Schalter.get_config()
     assert type(d) == Schalter
     assert len(d.config) == 0
+
+    @Schalter.configure()
+    def foo(*, a):
+        pass
+
+    foo(a=3)

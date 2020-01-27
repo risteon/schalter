@@ -51,6 +51,24 @@ def test_empty_configures(caplog):
     caplog.clear()
 
 
+def test_multiple_configures():
+    Schalter.clear()
+
+    @Schalter.configure('a')
+    @Schalter.configure('b')
+    def foo(*, a, b, c, d):
+        return a, b, c, d
+
+    with pytest.raises(KeyError):
+        _aa, _bb, _cc, _dd = foo(c=3, d=4)
+
+    Schalter['a'] = 1
+    Schalter['b'] = 2
+
+    aa, bb, cc, dd = foo(c=3, d=4)
+    assert aa == 1 and bb == 2
+
+
 def test_subset_configures_and_overrides():
     Schalter.clear()
 
@@ -71,13 +89,21 @@ def test_subset_configures_and_overrides():
     def baz(*, a, b):
         return a * b
 
+    # Schalter decorator marks the kwonly args as 'with default' to make this call possible
     assert baz() == 3
     assert foo(b=3) == 3
-    # default is overriden
+    # default is overridden
     assert baz(a=7) == 21
     assert baz(b=4) == 28
     assert foo(b=3) == 21
     assert bar() == 8
+
+    @Schalter.configure('a')
+    def not_callable(*, c, a):
+        pass
+    # c is a kwonly arg that is not configured. May not be marked as default available.
+    with pytest.raises(TypeError):
+        not_callable()
 
 
 def test_remap_key():
@@ -114,10 +140,16 @@ def test_misc():
     with pytest.raises(KeyError):
         _ = Schalter['b']
 
+    Schalter['c'] = 0
+    Schalter['d'] = 1
 
-    def bar(*, c: int = 4, d: int):
-        return c * d
+    @Schalter.configure(c='d', d='c')
+    def bar(*, c: int = 4, d: int = 5):
+        return c, d
 
+    assert Schalter['c'] == 0
+    assert Schalter['d'] == 1
+    assert (1, 0) == bar()
 
 
 def test_do_not_override_with_default_values():

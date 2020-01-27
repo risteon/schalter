@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='schalter',
-      version='0.1.0.dev2',
+      version='0.2.0.dev0',
       description='Fast and simple configuration',
       url='http://github.com/risteon/schalter',
       author='Christoph Rist',
@@ -10,6 +10,7 @@ setup(name='schalter',
       packages=['schalter'],
       zip_safe=False,
       install_requires=[
+          'decorator',
           'ruamel.yaml',
       ],
       setup_requires=['pytest-runner'],

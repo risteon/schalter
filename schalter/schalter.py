@@ -5,6 +5,7 @@ import logging
 import pathlib
 import inspect
 import typing
+from decorator import decorate
 from ruamel.yaml import YAML
 
 logger = logging.getLogger(__name__)
@@ -124,13 +125,14 @@ class Schalter(object, metaclass=_SchalterMeta):
             self._config[param] = value
 
     def set_manual(self, param: str, value):
-        if param not in self._overrides_manual:
-            self._overrides_manual[param] = value
-        elif self._overrides_manual[param] != value:
-            raise ValueError("Param '{}' already set to a different value.".format(param))
+        # Todo currently unused
+        # if param not in self._overrides_manual:
+        #     self._overrides_manual[param] = value
+        # elif self._overrides_manual[param] != value:
+        #     raise ValueError("Param '{}' already set to a different value.".format(param))
         self._config[param] = value
 
-    def make_call_decorated_function(self, decorated, mapping: {str: (str, typing.Any)}):
+    def make_call_decorated_function(self, mapping: {str: (str, typing.Any)}):
         """
 
         :param decorated: original function to be configured
@@ -139,18 +141,39 @@ class Schalter(object, metaclass=_SchalterMeta):
 
         :return:
         """
-        def call_decorated_function(*args, **kwargs):
+        def call_decorated_function(f, *args, **kw):
             # save all supplied args that are marked as to be configured
-            manual_params = set(kwargs.keys()).intersection(mapping.keys())
-            for p in manual_params:
-                self.set_manual(mapping[p][0], kwargs[p])
+            # this first line also contains default values
+            manual_params = set(kw.keys()).intersection(mapping.keys())
+            # filter out all params that are actually default values
+            if f.__kwdefaults__ is not None:
+                supplied_by_default = set(p for p in manual_params
+                                          if (p in f.__kwdefaults__
+                                              and kw[p] is f.__kwdefaults__[p]))
+            else:
+                supplied_by_default = set()
 
-            kwargs_to_add = mapping.keys() - kwargs.keys()
+            manual_params = manual_params - supplied_by_default
+            for p in manual_params:
+                self.set_manual(mapping[p][0], kw[p])
+
+            kwargs_to_add = mapping.keys() - manual_params
             try:
-                kwargs.update({k: self.config[mapping[k][0]] for k in kwargs_to_add})
+                kw.update({k: self.config[mapping[k][0]] for k in kwargs_to_add})
             except KeyError as e:
                 raise KeyError("Value missing in configuration: {}.".format(str(e)))
-            return decorated(*args, **kwargs)
+
+            # replace defaults with actual value if:
+            # * key is configured (== in mapping)
+            # * key has a function default value (== in __kwdefaults__)
+            # * value IS the actual function default value (not user supplied)
+            if f.__kwdefaults__ is not None:
+                default_values = {k: v.value for k, v in kw.items()
+                                  if k in mapping and k in f.__kwdefaults__ and
+                                  v is f.__kwdefaults__[k]}
+                kw.update(default_values)
+
+            return f(*args, **kw)
         return call_decorated_function
 
     @staticmethod
@@ -181,19 +204,28 @@ class Schalter(object, metaclass=_SchalterMeta):
             raise ValueError("More than one configuration.")
         Schalter.get_config().write_config_file(path_config)
 
-    @staticmethod
-    def configure(*args, **kwargs):
-        """ Configuring only keyword-only args.
+    class Default:
+        def __repr__(self):
+            return "Default Value: {} ({})".format(self.value, type(self.value))
 
-        :param args:
-        :param kwargs:
+        def __init__(self, value):
+            self.value = value
+
+    @staticmethod
+    def configure(*decorator_args, **decorator_kwargs):
+        """ Configuring only keyword-only args.
+        This is a decorator factory.
+
+        :param decorator_args:
+        :param decorator_kwargs:
         :return:
         """
 
         mapping = {}
 
-        def inner_conf(decorated):
-            argspec = inspect.getfullargspec(decorated)
+        # create actual decorator
+        def _decorator(f):
+            argspec = inspect.getfullargspec(f)
             kwonly = set(argspec.kwonlyargs)
             defaults = argspec.kwonlydefaults
 
@@ -213,6 +245,17 @@ class Schalter(object, metaclass=_SchalterMeta):
                 # for each value to be configured, see if a default is given
                 m = {k: (v, defaults.get(k, Schalter.Unset)) for k, v in mapping.items()}
 
+            # replace original function defaults with proxy objects
+            # -> enables to check later if a param was supplied or a default used
+            if m and f.__kwdefaults__ is None:
+                f.__kwdefaults__ = {}
+            if f.__kwdefaults__ is not None:
+                for k, (_, v) in m.items():
+                    if v is not Schalter.Unset:
+                        f.__kwdefaults__[k] = Schalter.Default(v)
+                    else:
+                        f.__kwdefaults__[k] = Schalter.Unset
+
             # Register defaults. Make sure defaults for the same parameter are consistent
             config_obj: Schalter = Schalter.get_config()
             for _, (config_name, default_value) in m.items():
@@ -221,23 +264,24 @@ class Schalter(object, metaclass=_SchalterMeta):
 
             # recreate the same mapping. Now all new defaults are set in the configuration
             # and consistent
-            m = {k: (v[0], config_obj.config.get(v[0])) for k, v in m.items()}
-            return config_obj.make_call_decorated_function(decorated, m)
+            m = {k: (v[0], config_obj.config.get(v[0], Schalter.Unset)) for k, v in m.items()}
+            return decorate(f, config_obj.make_call_decorated_function(m))
 
         # determine if this decorator is used without arguments
-        if args and callable(args[0]):
+        if decorator_args and callable(decorator_args[0]):
             # mapping is empty and will be interpreted to configure all kwonly args
-            return inner_conf(args[0])
+            return _decorator(decorator_args[0])
         else:
-            s = set(args)
-            if len(s) != len(args):
+            s = set(decorator_args)
+            if len(s) != len(decorator_args):
                 raise ValueError("Doubled values in 'args'.")
-            if bool(s.intersection(kwargs.keys())):
+            if bool(s.intersection(decorator_kwargs.keys())):
                 raise ValueError("Value from 'args' in 'kwargs'.")
             if not all(isinstance(x, str) for x in s) or \
-                    not all(isinstance(x, str) for x in kwargs.values()):
+                    not all(isinstance(x, str) for x in decorator_kwargs.values()):
                 raise ValueError("Only strings as config names allowed.")
-            mapping.update(kwargs)
+            mapping.update(decorator_kwargs)
             mapping.update({x: x for x in s})
 
-            return inner_conf
+            # return caller
+            return _decorator
