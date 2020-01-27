@@ -122,6 +122,11 @@ def test_remap_key():
     with pytest.raises(KeyError):
         _ = Schalter['bar']
 
+    @Schalter.configure(foo='bar', bar='foo')
+    def y_swap(*, foo, bar):
+        return foo, bar
+    assert y_swap(foo=42) == (42, 3)
+
 
 def test_misc():
     Schalter.clear()

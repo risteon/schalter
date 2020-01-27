@@ -1,12 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+
+"""
+
 import os
 import logging
 import pathlib
 import inspect
 import typing
+from contextlib import ContextDecorator
 from decorator import decorate
 from ruamel.yaml import YAML
+
+from .config_scope import ConfigScope
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -60,6 +67,7 @@ class Schalter(object, metaclass=_SchalterMeta):
     DEFAULT_ENV_VAR_NAME = 'SCHALTER_CONFIG_LOC'
     _configurations = {}
     Unset = object()
+    _scope = ConfigScope()
 
     def __init__(self, name='default'):
         self._raw_configs = []
@@ -212,18 +220,7 @@ class Schalter(object, metaclass=_SchalterMeta):
             self.value = value
 
     @staticmethod
-    def configure(*decorator_args, **decorator_kwargs):
-        """ Configuring only keyword-only args.
-        This is a decorator factory.
-
-        :param decorator_args:
-        :param decorator_kwargs:
-        :return:
-        """
-
-        mapping = {}
-
-        # create actual decorator
+    def _make_decorator(mapping):
         def _decorator(f):
             argspec = inspect.getfullargspec(f)
             kwonly = set(argspec.kwonlyargs)
@@ -266,11 +263,22 @@ class Schalter(object, metaclass=_SchalterMeta):
             # and consistent
             m = {k: (v[0], config_obj.config.get(v[0], Schalter.Unset)) for k, v in m.items()}
             return decorate(f, config_obj.make_call_decorated_function(m))
+        return _decorator
 
+    @staticmethod
+    def configure(*decorator_args, **decorator_kwargs):
+        """ Configuring only keyword-only args.
+        This is a decorator factory.
+
+        :param decorator_args:
+        :param decorator_kwargs:
+        :return:
+        """
+        mapping = {}
         # determine if this decorator is used without arguments
         if decorator_args and callable(decorator_args[0]):
             # mapping is empty and will be interpreted to configure all kwonly args
-            return _decorator(decorator_args[0])
+            return Schalter._make_decorator(mapping)(decorator_args[0])
         else:
             s = set(decorator_args)
             if len(s) != len(decorator_args):
@@ -282,6 +290,19 @@ class Schalter(object, metaclass=_SchalterMeta):
                 raise ValueError("Only strings as config names allowed.")
             mapping.update(decorator_kwargs)
             mapping.update({x: x for x in s})
-
             # return caller
-            return _decorator
+            return Schalter._make_decorator(mapping)
+
+    @staticmethod
+    def scoped_configure(*decorator_args, **decorator_kwargs):
+        return Schalter.configure(*decorator_args, **decorator_kwargs)
+
+    class Scope(ContextDecorator):
+        def __init__(self, name: str):
+            self.name = name
+
+        def __enter__(self) -> ConfigScope:
+            return Schalter._scope.make_scope(self.name)
+
+        def __exit__(self, exc_type, exc, exc_tb):
+            Schalter._scope.release_scope()
