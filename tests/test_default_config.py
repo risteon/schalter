@@ -18,3 +18,4 @@ def test_default_config():
         pass
 
     foo(a=3)
+    assert Schalter['a'] == 3

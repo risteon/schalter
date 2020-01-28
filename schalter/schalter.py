@@ -142,12 +142,12 @@ class Schalter(object, metaclass=_SchalterMeta):
         #     raise ValueError("Param '{}' already set to a different value.".format(param))
         self._config[param] = value
 
-    def make_call_decorated_function(self, mapping: {str: (str, typing.Any)}):
+    def make_call_decorated_function(self, mapping: {str: (str, typing.Any, bool)}):
         """
 
         :param decorated: original function to be configured
         :param mapping: keyword args to be configured or mapped to a specific key.
-        {LOCAL_NAME (name in func kwargs): (CONFIG_NAME, value if not supplied)}
+        {LOCAL_NAME (name in func kwargs): (CONFIG_NAME, value if not supplied, is_scoped)}
 
         :return:
         """
@@ -222,34 +222,40 @@ class Schalter(object, metaclass=_SchalterMeta):
             self.value = value
 
     @staticmethod
-    def _make_decorator(mapping):
+    def _make_decorator(mapping: typing.Union[typing.Dict[str, typing.Tuple[str, bool]], bool]):
+        """
+
+        :param mapping: LOCAL_NAME -> (CONFIG_NAME, is_scoped)
+        :return:
+        """
         def _decorator(f):
             argspec = inspect.getfullargspec(f)
             kwonly = set(argspec.kwonlyargs)
             defaults = argspec.kwonlydefaults
 
-            if set(mapping.keys()) > kwonly:
-                raise ValueError("Argument to configure not in function keyword-only args.")
+            if not kwonly:
+                logger.warning('Empty keyword-only arguments.')
 
-            if not mapping:
-                if not kwonly:
-                    logger.warning('Empty keyword-only arguments.')
+            if isinstance(mapping, bool):
                 # try to fill in all arguments
                 if defaults is None:
                     defaults = {}
-                m = {x: (x, defaults.get(x, Schalter.Unset)) for x in kwonly}
+                m = {x: (x, defaults.get(x, Schalter.Unset), mapping) for x in kwonly}
             else:
+                if set(mapping.keys()) > kwonly:
+                    raise ValueError("Argument to configure not in function keyword-only args.")
+
                 if defaults is None:
                     defaults = {}
                 # for each value to be configured, see if a default is given
-                m = {k: (v, defaults.get(k, Schalter.Unset)) for k, v in mapping.items()}
+                m = {k: (v[0], defaults.get(k, Schalter.Unset), v[1]) for k, v in mapping.items()}
 
             # replace original function defaults with proxy objects
             # -> enables to check later if a param was supplied or a default used
             if m and f.__kwdefaults__ is None:
                 f.__kwdefaults__ = {}
             if f.__kwdefaults__ is not None:
-                for k, (_, v) in m.items():
+                for k, (_, v, _) in m.items():
                     if v is not Schalter.Unset:
                         f.__kwdefaults__[k] = Schalter.Default(v)
                     else:
@@ -257,13 +263,13 @@ class Schalter(object, metaclass=_SchalterMeta):
 
             # Register defaults. Make sure defaults for the same parameter are consistent
             config_obj: Schalter = Schalter.get_config()
-            for _, (config_name, default_value) in m.items():
+            for _, (config_name, default_value, _is_scoped) in m.items():
                 if default_value is not Schalter.Unset:
                     config_obj.set_default(config_name, default_value)
 
             # recreate the same mapping. Now all new defaults are set in the configuration
             # and consistent
-            m = {k: (v[0], config_obj.config.get(v[0], Schalter.Unset)) for k, v in m.items()}
+            m = {k: (v[0], config_obj.config.get(v[0], Schalter.Unset), v[2]) for k, v in m.items()}
             return decorate(f, config_obj.make_call_decorated_function(m))
         return _decorator
 
@@ -276,11 +282,10 @@ class Schalter(object, metaclass=_SchalterMeta):
         :param decorator_kwargs:
         :return:
         """
-        mapping = {}
         # determine if this decorator is used without arguments
         if decorator_args and callable(decorator_args[0]):
             # mapping is empty and will be interpreted to configure all kwonly args
-            return Schalter._make_decorator(mapping)(decorator_args[0])
+            return Schalter._make_decorator(False)(decorator_args[0])
         else:
             s = set(decorator_args)
             if len(s) != len(decorator_args):
@@ -290,14 +295,41 @@ class Schalter(object, metaclass=_SchalterMeta):
             if not all(isinstance(x, str) for x in s) or \
                     not all(isinstance(x, str) for x in decorator_kwargs.values()):
                 raise ValueError("Only strings as config names allowed.")
-            mapping.update(decorator_kwargs)
-            mapping.update({x: x for x in s})
+            mapping = {k: (v, False) for k, v in decorator_kwargs.items()}
+            mapping.update({x: (x, False) for x in s})
+            if not mapping:
+                mapping = False
             # return caller
             return Schalter._make_decorator(mapping)
 
     @staticmethod
     def scoped_configure(*decorator_args, **decorator_kwargs):
-        return Schalter.configure(*decorator_args, **decorator_kwargs)
+        """ Configuring only keyword-only args.
+                This is a decorator factory.
+
+                :param decorator_args:
+                :param decorator_kwargs:
+                :return:
+                """
+        # determine if this decorator is used without arguments
+        if decorator_args and callable(decorator_args[0]):
+            # mapping is empty and will be interpreted to configure all kwonly args
+            return Schalter._make_decorator(True)(decorator_args[0])
+        else:
+            s = set(decorator_args)
+            if len(s) != len(decorator_args):
+                raise ValueError("Doubled values in 'args'.")
+            if bool(s.intersection(decorator_kwargs.keys())):
+                raise ValueError("Value from 'args' in 'kwargs'.")
+            if not all(isinstance(x, str) for x in s) or \
+                    not all(isinstance(x, str) for x in decorator_kwargs.values()):
+                raise ValueError("Only strings as config names allowed.")
+            mapping = {k: (v, False) for k, v in decorator_kwargs.items()}
+            mapping.update({x: (x, False) for x in s})
+            if not mapping:
+                mapping = True
+            # return caller
+            return Schalter._make_decorator(mapping)
 
     class Scope(ContextDecorator):
         def __init__(self, name: str):
