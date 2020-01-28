@@ -88,9 +88,11 @@ class Schalter(object, metaclass=_SchalterMeta):
     def config(self):
         return self._config
 
-    def _load_config(self, config_name: str, only_update: bool = False):
+    def _load_config(self, config_name: str, only_update: bool = False, env_var_name: str = None):
         try:
-            config_base_folder = os.environ[Schalter.DEFAULT_ENV_VAR_NAME]
+            env_var_name = env_var_name \
+                if env_var_name is not None else Schalter.DEFAULT_ENV_VAR_NAME
+            config_base_folder = os.environ[env_var_name]
         except KeyError:
             config_base_folder = os.path.expanduser('~/.schalter')
             if not pathlib.Path(config_base_folder).is_dir():
@@ -203,8 +205,8 @@ class Schalter(object, metaclass=_SchalterMeta):
         Schalter.get_config().config[key] = value
 
     @staticmethod
-    def load_config(config_name: str, only_update: bool = False):
-        Schalter.get_config()._load_config(config_name, only_update)
+    def load_config(config_name: str, only_update: bool = False, env_var_name: str = None):
+        Schalter.get_config()._load_config(config_name, only_update, env_var_name)
 
     @staticmethod
     def write_config(path_config: pathlib.Path):
