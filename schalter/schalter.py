@@ -164,12 +164,17 @@ class Schalter(object, metaclass=_SchalterMeta):
                 supplied_by_default = set()
 
             manual_params = manual_params - supplied_by_default
+
+            current_scope = self._scope.fullname
+            scoped_mapping = {k: (current_scope + '/' + v[0] if v[2] else v[0], v[1])
+                              for k, v in mapping.items()}
+
             for p in manual_params:
-                self.set_manual(mapping[p][0], kw[p])
+                self.set_manual(scoped_mapping[p][0], kw[p])
 
             kwargs_to_add = mapping.keys() - manual_params
             try:
-                kw.update({k: self.config[mapping[k][0]] for k in kwargs_to_add})
+                kw.update({k: self.config[scoped_mapping[k][0]] for k in kwargs_to_add})
             except KeyError as e:
                 raise KeyError("Value missing in configuration: {}.".format(str(e)))
 

@@ -19,8 +19,11 @@ def test_scope():
         assert config_scope.fullname == 'A'
 
     with Schalter.Scope('B') as config_scope:
-        foo(a=3)
+        foo(a=4)
         assert config_scope.fullname == 'B'
+
+    assert Schalter['A/a'] == 3
+    assert Schalter['B/a'] == 4
 
 
 def test_scoped_function():
