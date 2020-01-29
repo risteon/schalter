@@ -109,12 +109,13 @@ class Schalter(object, metaclass=_SchalterMeta):
                                   .format(str(config_file)))
 
         else:
-            config_file.parent.mkdir(parents=True, exist_ok=True)
-            yaml = YAML()
-            yaml.default_flow_style = False
-            yaml.dump({}, config_file)
+            raise FileNotFoundError("Cannot find config file '{}'.".format(str(config_file)))
+            # config_file.parent.mkdir(parents=True, exist_ok=True)
+            # yaml = YAML()
+            # yaml.default_flow_style = False
+            # yaml.dump({}, config_file)
 
-    def load_config_from_file(self, path_config_doc: pathlib.Path, only_update: bool = False):
+    def _load_config_from_file(self, path_config_doc: pathlib.Path, only_update: bool = False):
         logger.info("Loading/appending config from {}".format(str(path_config_doc)))
         self._update(path_config_doc, only_update)
 
@@ -212,6 +213,10 @@ class Schalter(object, metaclass=_SchalterMeta):
     @staticmethod
     def load_config(config_name: str, only_update: bool = False, env_var_name: str = None):
         Schalter.get_config()._load_config(config_name, only_update, env_var_name)
+
+    @staticmethod
+    def load_config_from_file(path_config_doc: pathlib.Path, only_update: bool = False):
+        Schalter.get_config()._load_config_from_file(path_config_doc, only_update)
 
     @staticmethod
     def write_config(path_config: pathlib.Path):
