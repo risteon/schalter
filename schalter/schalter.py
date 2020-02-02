@@ -17,7 +17,9 @@ from .config_scope import ConfigScope
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+formatter = logging.Formatter(
+    fmt="%(asctime)s - %(levelname)s - %(module)s - %(message)s"
+)
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 handler.setLevel(logging.INFO)
@@ -25,13 +27,12 @@ logger.addHandler(handler)
 
 
 class _SchalterMeta(type):
-
     def get(self, arg):
         raise NotImplementedError()
 
     def set(cls, key, value):
         raise NotImplementedError()
-    
+
     def get_config(cls, *_args, **_kwargs):
         raise NotImplementedError()
 
@@ -59,17 +60,19 @@ class ImmutableValues:
         if key not in self._x:
             self._x[key] = value
         elif self._x[key] != value:
-            raise ValueError("Param '{}' already set to a different default value.".format(key))
+            raise ValueError(
+                "Param '{}' already set to a different default value.".format(key)
+            )
 
 
 class Schalter(object, metaclass=_SchalterMeta):
 
-    DEFAULT_ENV_VAR_NAME = 'SCHALTER_CONFIG_LOC'
+    DEFAULT_ENV_VAR_NAME = "SCHALTER_CONFIG_LOC"
     _configurations = {}
     Unset = object()
     _scope = ConfigScope()
 
-    def __init__(self, name='default'):
+    def __init__(self, name="default"):
         self._raw_configs = []
         self._config = {}
         # default values can only be set once and are immutable
@@ -88,25 +91,33 @@ class Schalter(object, metaclass=_SchalterMeta):
     def config(self):
         return self._config
 
-    def _load_config(self, config_name: str, only_update: bool = False, env_var_name: str = None):
+    def _load_config(
+        self, config_name: str, only_update: bool = False, env_var_name: str = None
+    ):
         try:
-            env_var_name = env_var_name \
-                if env_var_name is not None else Schalter.DEFAULT_ENV_VAR_NAME
+            env_var_name = (
+                env_var_name
+                if env_var_name is not None
+                else Schalter.DEFAULT_ENV_VAR_NAME
+            )
             config_base_folder = os.environ[env_var_name]
         except KeyError:
-            config_base_folder = os.path.expanduser('~/.schalter')
+            config_base_folder = os.path.expanduser("~/.schalter")
             if not pathlib.Path(config_base_folder).is_dir():
                 raise RuntimeError("Cannot determine configuration base location")
 
-        config_file: pathlib.Path = config_base_folder / pathlib.Path(config_name + '.yaml')
+        config_file: pathlib.Path = config_base_folder / pathlib.Path(
+            config_name + ".yaml"
+        )
 
         if config_file.is_file():
             logger.info("Loading/appending config from {}".format(str(config_file)))
             self._update(config_file, only_update)
 
         elif config_file.exists():
-            raise FileExistsError("Cannot create empty config with name '{}'."
-                                  .format(str(config_file)))
+            raise FileExistsError(
+                "Cannot create empty config with name '{}'.".format(str(config_file))
+            )
 
         else:
             raise FileNotFoundError("Cannot find config file '{}'.".format(str(config_file)))
@@ -115,7 +126,9 @@ class Schalter(object, metaclass=_SchalterMeta):
             # yaml.default_flow_style = False
             # yaml.dump({}, config_file)
 
-    def _load_config_from_file(self, path_config_doc: pathlib.Path, only_update: bool = False):
+    def load_config_from_file(
+        self, path_config_doc: pathlib.Path, only_update: bool = False
+    ):
         logger.info("Loading/appending config from {}".format(str(path_config_doc)))
         self._update(path_config_doc, only_update)
 
@@ -125,7 +138,7 @@ class Schalter(object, metaclass=_SchalterMeta):
         yaml.dump(self._config, path_config)
 
     def _update(self, config_file, only_update: bool = False):
-        yaml = YAML(typ='safe')  # default, if not specified, is 'rt' (round-trip)
+        yaml = YAML(typ="safe")  # default, if not specified, is 'rt' (round-trip)
         config_data = yaml.load(config_file)
         self._raw_configs.append((config_file, config_data))
         self._config.update(config_data)
@@ -136,39 +149,39 @@ class Schalter(object, metaclass=_SchalterMeta):
             self._config[param] = value
 
     def set_manual(self, param: str, value):
-        # Todo currently unused
-        # if param not in self._overrides_manual:
-        #     self._overrides_manual[param] = value
-        # elif self._overrides_manual[param] != value:
-        #     raise ValueError("Param '{}' already set to a different value.".format(param))
         self._config[param] = value
 
     def make_call_decorated_function(self, mapping: {str: (str, typing.Any, bool)}):
         """
 
-        :param decorated: original function to be configured
         :param mapping: keyword args to be configured or mapped to a specific key.
-        {LOCAL_NAME (name in func kwargs): (CONFIG_NAME, value if not supplied, is_scoped)}
+        {LOCAL_NAME (name in func kwargs):
+            (CONFIG_NAME, value if not supplied, is_scoped)}
 
         :return:
         """
+
         def call_decorated_function(f, *args, **kw):
             # save all supplied args that are marked as to be configured
             # this first line also contains default values
             manual_params = set(kw.keys()).intersection(mapping.keys())
             # filter out all params that are actually default values
             if f.__kwdefaults__ is not None:
-                supplied_by_default = set(p for p in manual_params
-                                          if (p in f.__kwdefaults__
-                                              and kw[p] is f.__kwdefaults__[p]))
+                supplied_by_default = set(
+                    p
+                    for p in manual_params
+                    if (p in f.__kwdefaults__ and kw[p] is f.__kwdefaults__[p])
+                )
             else:
                 supplied_by_default = set()
 
             manual_params = manual_params - supplied_by_default
 
             current_scope = self._scope.fullname
-            scoped_mapping = {k: (current_scope + '/' + v[0] if v[2] else v[0], v[1])
-                              for k, v in mapping.items()}
+            scoped_mapping = {
+                k: (current_scope + "/" + v[0] if v[2] else v[0], v[1])
+                for k, v in mapping.items()
+            }
 
             for p in manual_params:
                 self.set_manual(scoped_mapping[p][0], kw[p])
@@ -184,12 +197,17 @@ class Schalter(object, metaclass=_SchalterMeta):
             # * key has a function default value (== in __kwdefaults__)
             # * value IS the actual function default value (not user supplied)
             if f.__kwdefaults__ is not None:
-                default_values = {k: v.value for k, v in kw.items()
-                                  if k in mapping and k in f.__kwdefaults__ and
-                                  v is f.__kwdefaults__[k]}
+                default_values = {
+                    k: v.value
+                    for k, v in kw.items()
+                    if k in mapping
+                    and k in f.__kwdefaults__
+                    and v is f.__kwdefaults__[k]
+                }
                 kw.update(default_values)
 
             return f(*args, **kw)
+
         return call_decorated_function
 
     @staticmethod
@@ -197,7 +215,7 @@ class Schalter(object, metaclass=_SchalterMeta):
         Schalter._configurations.clear()
 
     @staticmethod
-    def get_config(name='default'):
+    def get_config(name="default"):
         if name not in Schalter._configurations:
             Schalter._configurations[name] = Schalter(name=name)
         return Schalter._configurations[name]
@@ -211,7 +229,9 @@ class Schalter(object, metaclass=_SchalterMeta):
         Schalter.get_config().config[key] = value
 
     @staticmethod
-    def load_config(config_name: str, only_update: bool = False, env_var_name: str = None):
+    def load_config(
+        config_name: str, only_update: bool = False, env_var_name: str = None
+    ):
         Schalter.get_config()._load_config(config_name, only_update, env_var_name)
 
     @staticmethod
@@ -232,19 +252,22 @@ class Schalter(object, metaclass=_SchalterMeta):
             self.value = value
 
     @staticmethod
-    def _make_decorator(mapping: typing.Union[typing.Dict[str, typing.Tuple[str, bool]], bool]):
+    def _make_decorator(
+        mapping: typing.Union[typing.Dict[str, typing.Tuple[str, bool]], bool]
+    ):
         """
 
         :param mapping: LOCAL_NAME -> (CONFIG_NAME, is_scoped)
         :return:
         """
+
         def _decorator(f):
             argspec = inspect.getfullargspec(f)
             kwonly = set(argspec.kwonlyargs)
             defaults = argspec.kwonlydefaults
 
             if not kwonly:
-                logger.warning('Empty keyword-only arguments.')
+                logger.warning("Empty keyword-only arguments.")
 
             if isinstance(mapping, bool):
                 # try to fill in all arguments
@@ -253,12 +276,17 @@ class Schalter(object, metaclass=_SchalterMeta):
                 m = {x: (x, defaults.get(x, Schalter.Unset), mapping) for x in kwonly}
             else:
                 if set(mapping.keys()) > kwonly:
-                    raise ValueError("Argument to configure not in function keyword-only args.")
+                    raise ValueError(
+                        "Argument to configure not in function keyword-only args."
+                    )
 
                 if defaults is None:
                     defaults = {}
                 # for each value to be configured, see if a default is given
-                m = {k: (v[0], defaults.get(k, Schalter.Unset), v[1]) for k, v in mapping.items()}
+                m = {
+                    k: (v[0], defaults.get(k, Schalter.Unset), v[1])
+                    for k, v in mapping.items()
+                }
 
             # replace original function defaults with proxy objects
             # -> enables to check later if a param was supplied or a default used
@@ -271,16 +299,22 @@ class Schalter(object, metaclass=_SchalterMeta):
                     else:
                         f.__kwdefaults__[k] = Schalter.Unset
 
-            # Register defaults. Make sure defaults for the same parameter are consistent
+            # Register defaults.
+            # Make sure defaults for the same parameter are consistent
             config_obj: Schalter = Schalter.get_config()
             for _, (config_name, default_value, _is_scoped) in m.items():
                 if default_value is not Schalter.Unset:
                     config_obj.set_default(config_name, default_value)
 
-            # recreate the same mapping. Now all new defaults are set in the configuration
+            # recreate the same mapping.
+            # Now all new defaults are set in the configuration
             # and consistent
-            m = {k: (v[0], config_obj.config.get(v[0], Schalter.Unset), v[2]) for k, v in m.items()}
+            m = {
+                k: (v[0], config_obj.config.get(v[0], Schalter.Unset), v[2])
+                for k, v in m.items()
+            }
             return decorate(f, config_obj.make_call_decorated_function(m))
+
         return _decorator
 
     @staticmethod
@@ -302,8 +336,9 @@ class Schalter(object, metaclass=_SchalterMeta):
                 raise ValueError("Doubled values in 'args'.")
             if bool(s.intersection(decorator_kwargs.keys())):
                 raise ValueError("Value from 'args' in 'kwargs'.")
-            if not all(isinstance(x, str) for x in s) or \
-                    not all(isinstance(x, str) for x in decorator_kwargs.values()):
+            if not all(isinstance(x, str) for x in s) or not all(
+                isinstance(x, str) for x in decorator_kwargs.values()
+            ):
                 raise ValueError("Only strings as config names allowed.")
             mapping = {k: (v, False) for k, v in decorator_kwargs.items()}
             mapping.update({x: (x, False) for x in s})
@@ -331,8 +366,9 @@ class Schalter(object, metaclass=_SchalterMeta):
                 raise ValueError("Doubled values in 'args'.")
             if bool(s.intersection(decorator_kwargs.keys())):
                 raise ValueError("Value from 'args' in 'kwargs'.")
-            if not all(isinstance(x, str) for x in s) or \
-                    not all(isinstance(x, str) for x in decorator_kwargs.values()):
+            if not all(isinstance(x, str) for x in s) or not all(
+                isinstance(x, str) for x in decorator_kwargs.values()
+            ):
                 raise ValueError("Only strings as config names allowed.")
             mapping = {k: (v, False) for k, v in decorator_kwargs.items()}
             mapping.update({x: (x, False) for x in s})

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = """Christoph Rist"""
-__email__ = 'c.rist@posteo.de'
+__email__ = "c.rist@posteo.de"
 
 import pytest
 from schalter import Schalter
@@ -14,16 +14,16 @@ def test_scope():
     def foo(*, a):
         return a
 
-    with Schalter.Scope('A') as config_scope:
+    with Schalter.Scope("A") as config_scope:
         foo(a=3)
-        assert config_scope.fullname == 'A'
+        assert config_scope.fullname == "A"
 
-    with Schalter.Scope('B') as config_scope:
+    with Schalter.Scope("B") as config_scope:
         foo(a=4)
-        assert config_scope.fullname == 'B'
+        assert config_scope.fullname == "B"
 
-    assert Schalter['A/a'] == 3
-    assert Schalter['B/a'] == 4
+    assert Schalter["A/a"] == 3
+    assert Schalter["B/a"] == 4
 
 
 def test_scoped_function():
@@ -33,10 +33,10 @@ def test_scoped_function():
     def foo(*, a):
         return a
 
-    @Schalter.Scope('A')
+    @Schalter.Scope("A")
     def do_stuff_a():
         foo(a=3)
 
-    @Schalter.Scope('B')
+    @Schalter.Scope("B")
     def do_stuff_b():
         foo(a=3)

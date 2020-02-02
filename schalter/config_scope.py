@@ -11,7 +11,7 @@ class ConfigScope:
 
     @property
     def fullname(self):
-        return '/'.join(self.parts)
+        return "/".join(self.parts)
 
     def make_scope(self, name: str):
         self.parts.append(name)
