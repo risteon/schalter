@@ -106,9 +106,10 @@ class Schalter(object, metaclass=_SchalterMeta):
             if not pathlib.Path(config_base_folder).is_dir():
                 raise RuntimeError("Cannot determine configuration base location")
 
-        config_file: pathlib.Path = config_base_folder / pathlib.Path(
-            config_name + ".yaml"
-        )
+        if not config_name.endswith(".yaml"):
+            config_name += ".yaml"
+
+        config_file: pathlib.Path = config_base_folder / pathlib.Path(config_name)
 
         if config_file.is_file():
             logger.info("Loading/appending config from {}".format(str(config_file)))
@@ -120,17 +121,19 @@ class Schalter(object, metaclass=_SchalterMeta):
             )
 
         else:
-            raise FileNotFoundError("Cannot find config file '{}'.".format(str(config_file)))
+            raise FileNotFoundError(
+                "Cannot find config file '{}'.".format(str(config_file))
+            )
             # config_file.parent.mkdir(parents=True, exist_ok=True)
             # yaml = YAML()
             # yaml.default_flow_style = False
             # yaml.dump({}, config_file)
 
     def load_config_from_file(
-        self, path_config_doc: pathlib.Path, only_update: bool = False
+        self, path_config: pathlib.Path, only_update: bool = False
     ):
-        logger.info("Loading/appending config from {}".format(str(path_config_doc)))
-        self._update(path_config_doc, only_update)
+        logger.info("Loading/appending config from {}".format(str(path_config)))
+        self._update(path_config, only_update)
 
     def write_config_file(self, path_config: pathlib.Path):
         yaml = YAML()
@@ -235,8 +238,10 @@ class Schalter(object, metaclass=_SchalterMeta):
         Schalter.get_config()._load_config(config_name, only_update, env_var_name)
 
     @staticmethod
-    def load_config_from_file(path_config_doc: pathlib.Path, only_update: bool = False):
-        Schalter.get_config()._load_config_from_file(path_config_doc, only_update)
+    def load_config_from_file_default(
+        path_config: pathlib.Path, only_update: bool = False
+    ):
+        Schalter.get_config().load_config_from_file(path_config, only_update)
 
     @staticmethod
     def write_config(path_config: pathlib.Path):
