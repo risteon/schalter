@@ -129,6 +129,16 @@ class Schalter(object, metaclass=_SchalterMeta):
             # yaml.default_flow_style = False
             # yaml.dump({}, config_file)
 
+    def set_config(self, config: str):
+        """
+        Example string: "{some_key: True, another_key: 4}"
+        """
+        logger.info("Loading/appending config string {}".format(config))
+        yaml = YAML(typ="safe")
+        config_data = yaml.load(config)
+        self._raw_configs.append(('<str>', config_data))
+        self._config.update(config_data)
+
     def load_config_from_file(
         self, path_config: pathlib.Path, only_update: bool = False
     ):
