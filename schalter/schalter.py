@@ -124,10 +124,6 @@ class Schalter(object, metaclass=_SchalterMeta):
             raise FileNotFoundError(
                 "Cannot find config file '{}'.".format(str(config_file))
             )
-            # config_file.parent.mkdir(parents=True, exist_ok=True)
-            # yaml = YAML()
-            # yaml.default_flow_style = False
-            # yaml.dump({}, config_file)
 
     def set_config(self, config: str):
         """
@@ -136,7 +132,7 @@ class Schalter(object, metaclass=_SchalterMeta):
         logger.info("Loading/appending config string {}".format(config))
         yaml = YAML(typ="safe")
         config_data = yaml.load(config)
-        self._raw_configs.append(('<str>', config_data))
+        self._raw_configs.append(("<str>", config_data))
         self._config.update(config_data)
 
     def load_config_from_file(
@@ -151,6 +147,9 @@ class Schalter(object, metaclass=_SchalterMeta):
         yaml.dump(self._config, path_config)
 
     def _update(self, config_file, only_update: bool = False):
+        if only_update:
+            raise NotImplementedError()
+
         yaml = YAML(typ="safe")  # default, if not specified, is 'rt' (round-trip)
         config_data = yaml.load(config_file)
         self._raw_configs.append((config_file, config_data))
@@ -218,7 +217,6 @@ class Schalter(object, metaclass=_SchalterMeta):
                     and v is f.__kwdefaults__[k]
                 }
                 kw.update(default_values)
-
             return f(*args, **kw)
 
         return call_decorated_function
@@ -265,6 +263,23 @@ class Schalter(object, metaclass=_SchalterMeta):
 
         def __init__(self, value):
             self.value = value
+
+    def _decorate_function_with_mapping(self, f, m):
+        decorated = decorate(f, self.make_call_decorated_function(m))
+        """ Save/update mapping and original function
+        """
+        try:
+            decorated.schalter_mapping.update(m)
+        except AttributeError:
+            setattr(decorated, "schalter_mapping", m)
+        if not hasattr(decorated, "schalter_f"):
+            setattr(decorated, "schalter_f", f)
+        try:
+            if id(decorated.schalter_config) != id(self):
+                raise NotImplementedError()
+        except AttributeError:
+            setattr(decorated, "schalter_config", self)
+        return decorated
 
     @staticmethod
     def _make_decorator(
@@ -328,7 +343,19 @@ class Schalter(object, metaclass=_SchalterMeta):
                 k: (v[0], config_obj.config.get(v[0], Schalter.Unset), v[2])
                 for k, v in m.items()
             }
-            return decorate(f, config_obj.make_call_decorated_function(m))
+
+            return config_obj._decorate_function_with_mapping(f, m)
+
+        return _decorator
+
+    @staticmethod
+    def prefix(prefix: str):
+        def _decorator(f):
+            c: Schalter = f.schalter_config
+            m = f.schalter_mapping
+            f = f.schalter_f
+            m = {k: (prefix + "/" + v[0], v[1], v[2]) for k, v in m.items()}
+            return c._decorate_function_with_mapping(f, m)
 
         return _decorator
 
