@@ -7,7 +7,7 @@ import pytest
 from schalter import Schalter
 
 
-def test_prefix():
+def test_prefix_standard():
     Schalter.clear()
 
     @Schalter.prefix("test")
@@ -17,3 +17,24 @@ def test_prefix():
 
     Schalter["test/a"] = 3
     foo()
+
+    @Schalter.prefix("b")
+    @Schalter.configure
+    def bar(*, b: int, c: str):
+        return b, c
+
+    Schalter["b/b"] = 2
+    Schalter["b/c"] = "baz"
+    assert bar() == (2, "baz")
+
+
+def test_prefix_useless_warning(caplog):
+    @Schalter.prefix("useless")
+    def bar():
+        pass
+
+    assert "WARNING" in caplog.text
+    assert caplog.records
+    caplog.clear()
+
+    bar()

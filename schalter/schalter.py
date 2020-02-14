@@ -351,9 +351,13 @@ class Schalter(object, metaclass=_SchalterMeta):
     @staticmethod
     def prefix(prefix: str):
         def _decorator(f):
-            c: Schalter = f.schalter_config
-            m = f.schalter_mapping
-            f = f.schalter_f
+            try:
+                c: Schalter = f.schalter_config
+                m = f.schalter_mapping
+                f = f.schalter_f
+            except AttributeError:
+                logger.warning("Prefix without any configurations.")
+                return f
             m = {k: (prefix + "/" + v[0], v[1], v[2]) for k, v in m.items()}
             return c._decorate_function_with_mapping(f, m)
 
