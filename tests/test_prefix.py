@@ -27,6 +27,21 @@ def test_prefix_standard():
     Schalter["b/c"] = "baz"
     assert bar() == (2, "baz")
 
+    @Schalter.configure("non_prefixed")
+    @Schalter.prefix("some_prefix")
+    @Schalter.configure("prefixed")
+    def baz(*, prefixed, non_prefixed):
+        return prefixed, non_prefixed
+
+    Schalter["some_prefix/prefixed"] = 123
+    Schalter["non_prefixed"] = 456
+    assert baz() == (123, 456)
+
+    with pytest.raises(KeyError):
+        _ = Schalter["prefixed"]
+    with pytest.raises(KeyError):
+        _ = Schalter["some_prefix/non_prefixed"]
+
 
 def test_prefix_useless_warning(caplog):
     @Schalter.prefix("useless")
