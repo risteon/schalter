@@ -103,6 +103,19 @@ def test_subset_configures_and_overrides():
     assert foo(b=3) == 21
     assert bar() == 8
 
+
+def test_functions_callable():
+    Schalter.clear()
+
+    @Schalter.configure("x")
+    def foo(*, x):
+        pass
+
+    # This raises a key error, because there is no value for x
+    # instead of a TypeError for an unsupplied argument
+    with pytest.raises(KeyError):
+        foo()
+
     @Schalter.configure("a")
     def not_callable(*, c, a):
         pass
@@ -110,6 +123,15 @@ def test_subset_configures_and_overrides():
     # c is a kwonly arg that is not configured. May not be marked as default available.
     with pytest.raises(TypeError):
         not_callable()
+
+    @Schalter.configure("a")
+    @Schalter.configure("c")
+    def is_callable(*, c, a):
+        pass
+
+    Schalter["a"] = 0
+    Schalter["c"] = 0
+    is_callable()
 
 
 def test_remap_key():

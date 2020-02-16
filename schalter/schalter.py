@@ -274,6 +274,8 @@ class Schalter(object, metaclass=_SchalterMeta):
             setattr(decorated, "schalter_mapping", m)
         if not hasattr(decorated, "schalter_f"):
             setattr(decorated, "schalter_f", f)
+        else:
+            f.schalter_f.__kwdefaults__ = f.__kwdefaults__
         try:
             if id(decorated.schalter_config) != id(self):
                 raise NotImplementedError()

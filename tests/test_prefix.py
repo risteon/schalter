@@ -43,6 +43,42 @@ def test_prefix_standard():
         _ = Schalter["some_prefix/non_prefixed"]
 
 
+def test_multiple_prefixes():
+    Schalter.clear()
+
+    Schalter["first/second/leaf_a"] = 8
+    Schalter["first/second/leaf_b"] = "foo"
+
+    @Schalter.prefix("first")
+    @Schalter.prefix("second")
+    @Schalter.configure
+    def foo(_unused, *, leaf_a, leaf_b):
+        return _unused, leaf_a, leaf_b
+
+    with pytest.raises(TypeError):
+        _ = foo()
+
+    assert foo(None) == (None, 8, "foo")
+
+
+def test_multiple_prefixed_configures():
+    Schalter.clear()
+
+    Schalter["p/leaf_a"] = 8
+    Schalter["p/leaf_b"] = "foo"
+
+    @Schalter.prefix("p")
+    @Schalter.configure("leaf_a")
+    @Schalter.configure("leaf_b")
+    def foo(_unused, *, leaf_a, leaf_b):
+        return _unused, leaf_a, leaf_b
+
+    with pytest.raises(TypeError):
+        _ = foo()
+
+    assert foo(None) == (None, 8, "foo")
+
+
 def test_prefix_useless_warning(caplog):
     @Schalter.prefix("useless")
     def bar():
