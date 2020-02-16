@@ -1,5 +1,13 @@
 from setuptools import setup
 
+test_deps = [
+    'pytest',
+    'pytest-cov',
+]
+extras = {
+    'test': test_deps,
+}
+
 setup(name='schalter',
       version='0.2.0.dev0',
       description='Fast and simple configuration',
@@ -14,7 +22,8 @@ setup(name='schalter',
           'ruamel.yaml',
       ],
       setup_requires=['pytest-runner'],
-      tests_require=['pytest'],
+      tests_require=test_deps,
+      extras_require=extras,
       python_requires='>=3.6',
       classifiers=[
           'Development Status :: 3 - Alpha',
