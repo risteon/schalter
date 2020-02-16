@@ -12,7 +12,7 @@ def test_prefix_standard():
 
     @Schalter.prefix("test")
     @Schalter.configure("a")
-    def foo(*, a):
+    def foo(*, a, b=3):
         return a
 
     Schalter["test/a"] = 3
@@ -77,6 +77,21 @@ def test_multiple_prefixed_configures():
         _ = foo()
 
     assert foo(None) == (None, 8, "foo")
+
+
+def test_prevent_prefix_with_default_values():
+    Schalter.clear()
+
+    def wrapper():
+        @Schalter.prefix("p")
+        @Schalter.configure
+        def foo(*, some_arg=1):
+            pass
+
+        assert Schalter['p/some_arg'] == 1
+
+    with pytest.raises(NotImplementedError):
+        wrapper()
 
 
 def test_prefix_useless_warning(caplog):

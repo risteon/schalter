@@ -357,6 +357,13 @@ class Schalter(object, metaclass=_SchalterMeta):
                 c: Schalter = f.schalter_config
                 m = f.schalter_mapping
                 f = f.schalter_f
+
+                # no prefix with configured function defaults allowed
+                defaults = inspect.getfullargspec(f).kwonlydefaults
+                if defaults is not None:
+                    if any(type(defaults[k]) == Schalter.Default for k in m.keys()):
+                        raise NotImplementedError()
+
             except AttributeError:
                 logger.warning("Prefix without any configurations.")
                 return f
