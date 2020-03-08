@@ -37,7 +37,7 @@ class _SchalterMeta(type):
         raise NotImplementedError()
 
     def __getitem__(cls, arg):
-        return cls.get(arg)
+        return cls._getitem(arg)
 
     def __setitem__(cls, key, value):
         return cls.set(key, value)
@@ -232,8 +232,12 @@ class Schalter(object, metaclass=_SchalterMeta):
         return Schalter._configurations[name]
 
     @staticmethod
-    def get(arg):
-        return Schalter.get_config().config[arg]
+    def get(*args, **kw):
+        return Schalter.get_config().config.get(*args, **kw)
+
+    @staticmethod
+    def _getitem(item):
+        return Schalter.get_config().config[item]
 
     @staticmethod
     def set(key, value):
