@@ -9,7 +9,7 @@ extras = {
 }
 
 setup(name='schalter',
-      version='0.2.0.dev0',
+      version='0.3alpha0',
       description='Fast and simple configuration',
       url='http://github.com/risteon/schalter',
       author='Christoph Rist',

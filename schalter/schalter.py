@@ -268,24 +268,47 @@ class Schalter(object, metaclass=_SchalterMeta):
         def __init__(self, value):
             self.value = value
 
-    def _decorate_function_with_mapping(self, f, m):
-        decorated = decorate(f, self.make_call_decorated_function(m))
-        """ Save/update mapping and original function
-        """
+    def _decorate_function_with_mapping(self, f, m, force_update: bool = False):
+
         try:
-            decorated.schalter_mapping.update(m)
-        except AttributeError:
-            setattr(decorated, "schalter_mapping", m)
-        if not hasattr(decorated, "schalter_f"):
-            setattr(decorated, "schalter_f", f)
-        else:
+            # try to update the mapping of an already decorated function
+            mapping = f.schalter_mapping
+
+            if force_update:
+                mapping.update(m)
+            else:
+
+                updates = {
+                    k for k in mapping.keys() & m.keys() if mapping[k][0] != m[k][0]
+                }
+                for k in updates:
+                    # introduce a strict mode where this raises an error?
+                    msg = (
+                        "Replacing original mapping of argument '{}' "
+                        "to config entry '{}' with new mapping to '{}'.".format(
+                            k, m[k][0], mapping[k][0]
+                        )
+                    )
+                    logger.warning("Function '{}': {}".format(f.__name__, msg))
+
+                mapping.update({k: v for k, v in m.items() if k not in updates})
+
             f.schalter_f.__kwdefaults__ = f.__kwdefaults__
+        except AttributeError:
+            # first decoration of function. Save mapping and original function
+            setattr(f, "schalter_mapping", m)
+
+            decorated = decorate(f, self.make_call_decorated_function(m))
+            setattr(decorated, "schalter_f", f)
+            f = decorated
+
         try:
-            if id(decorated.schalter_config) != id(self):
+            if id(f.schalter_config) != id(self):
                 raise NotImplementedError()
         except AttributeError:
-            setattr(decorated, "schalter_config", self)
-        return decorated
+            setattr(f, "schalter_config", self)
+
+        return f
 
     @staticmethod
     def _make_decorator(
@@ -371,8 +394,10 @@ class Schalter(object, metaclass=_SchalterMeta):
             except AttributeError:
                 logger.warning("Prefix without any configurations.")
                 return f
+
+            # add prefix to mapping and re-decorate (update mapping)
             m = {k: (prefix + "/" + v[0], v[1], v[2]) for k, v in m.items()}
-            return c._decorate_function_with_mapping(f, m)
+            return c._decorate_function_with_mapping(f, m, force_update=True)
 
         return _decorator
 

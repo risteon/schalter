@@ -94,7 +94,8 @@ def test_subset_configures_and_overrides():
     def baz(*, a, b):
         return a * b
 
-    # Schalter decorator marks the kwonly args as 'with default' to make this call possible
+    # Schalter decorator marks the kwonly args as 'with default'
+    # to make this call possible
     assert baz() == 3
     assert foo(b=3) == 3
     # default is overridden
@@ -109,16 +110,16 @@ def test_functions_callable():
 
     @Schalter.configure("x")
     def foo(*, x):
-        pass
+        _ = x
 
     # This raises a key error, because there is no value for x
-    # instead of a TypeError for an unsupplied argument
+    # instead of a TypeError for a missing argument
     with pytest.raises(KeyError):
         foo()
 
     @Schalter.configure("a")
     def not_callable(*, c, a):
-        pass
+        _ = c, a
 
     # c is a kwonly arg that is not configured. May not be marked as default available.
     with pytest.raises(TypeError):
@@ -127,7 +128,7 @@ def test_functions_callable():
     @Schalter.configure("a")
     @Schalter.configure("c")
     def is_callable(*, c, a):
-        pass
+        _ = c, a
 
     Schalter["a"] = 0
     Schalter["c"] = 0
@@ -157,6 +158,66 @@ def test_remap_key():
         return foo, bar
 
     assert y_swap(foo=42) == (42, 3)
+
+
+def test_contradicting_remap(caplog):
+    Schalter.clear()
+
+    Schalter["x"] = "x"
+    Schalter["y"] = "y"
+
+    @Schalter.configure(a="x")
+    @Schalter.configure(a="y")
+    def foo(*, a):
+        return a
+
+    # expecting a warning
+    assert "WARNING" in caplog.text
+    assert caplog.records
+    caplog.clear()
+
+    # the mapping is expected to point to "y" config entry
+    assert foo() == "y"
+
+    # this does not warn, because the mapping target is identical.
+    @Schalter.configure
+    @Schalter.configure("a")
+    def bar(*, a):
+        return a
+
+    assert not caplog.text
+    assert not caplog.records
+    caplog.clear()
+
+    # this warns for two remaps.
+    @Schalter.configure
+    @Schalter.configure(a="y")
+    @Schalter.configure("a", b="y")
+    def bar(*, a, b):
+        return a, b
+
+    # expecting a warning
+    assert "WARNING" in caplog.text
+    assert len(caplog.records) == 2
+    caplog.clear()
+
+
+def test_value_change():
+    Schalter.clear()
+
+    Schalter["x"] = 1
+    Schalter["y"] = 2
+
+    @Schalter.configure(a="x")
+    @Schalter.configure(b="y")
+    def foo(*, a, b):
+        return a + b
+
+    assert foo() == 3
+    Schalter["x"] = 3
+    assert foo() == 2 + 3
+    Schalter["y"] = 7
+    assert foo() == 3 + 7
 
 
 def test_misc():
@@ -239,3 +300,24 @@ def test_multiple_default_values():
         @Schalter.configure
         def bar(*, _name2: str = "bar"):
             pass
+
+
+def test_broad_and_narrow_configures():
+    Schalter.clear()
+
+    @Schalter.configure
+    @Schalter.configure("b")
+    def foo(*, a, b):
+        return a + b
+
+    @Schalter.configure
+    @Schalter.configure(d="a", c="b")
+    def bar(*, c, d):
+        return c, d
+
+    Schalter["a"] = 1
+    Schalter["b"] = 2
+    Schalter["c"] = 3
+
+    assert foo() == 3
+    assert bar() == (2, 1)
