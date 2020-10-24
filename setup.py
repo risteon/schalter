@@ -10,7 +10,7 @@ extras = {
 
 setup(name='schalter',
       version='0.3alpha0',
-      description='Fast and simple configuration',
+      description='Configuration management in Python for lazy people.',
       url='http://github.com/risteon/schalter',
       author='Christoph Rist',
       author_email='c.rist@posteo.de',
